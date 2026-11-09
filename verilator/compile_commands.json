@@ -1,0 +1,41 @@
+[
+  {
+    "file": "../matrix_tb.cpp",
+    "arguments": [
+      "/usr/bin/g++",
+      "-I.",
+      "-MMD",
+      "-I/usr/share/verilator/include",
+      "-I/usr/share/verilator/include/vltstd",
+      "-DVERILATOR=1",
+      "-DVM_COVERAGE=0",
+      "-DVM_SC=0",
+      "-DVM_TIMING=0",
+      "-DVM_TRACE=1",
+      "-DVM_TRACE_FST=0",
+      "-DVM_TRACE_VCD=1",
+      "-DVM_TRACE_SAIF=0",
+      "-DVM_VPI=0",
+      "-faligned-new",
+      "-fcf-protection=none",
+      "-Wno-bool-operation",
+      "-Wno-int-in-bool-context",
+      "-Wno-shadow",
+      "-Wno-sign-compare",
+      "-Wno-subobject-linkage",
+      "-Wno-tautological-compare",
+      "-Wno-uninitialized",
+      "-Wno-unused-but-set-parameter",
+      "-Wno-unused-but-set-variable",
+      "-Wno-unused-parameter",
+      "-Wno-unused-variable",
+      "-Os",
+      "-c",
+      "-o",
+      "matrix_tb.o",
+      "../matrix_tb.cpp"
+    ],
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
+    "output": "matrix_tb.o"
+  }
+]
