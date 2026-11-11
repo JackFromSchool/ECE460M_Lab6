@@ -139,6 +139,51 @@ class CFloat8 {
             return CFloat8(sum.exp, (sum.frac & 0x80) >> 7, sum.frac >> 4);
       }
    }
+
+   CFloat8 operator*(const CFloat8 &n) {
+      uint8_t multiplicand = n.get_fraction() | n.get_sign() << 3;
+      uint8_t multiplier = this->get_fraction() | this->get_sign() << 3;
+
+      // Multiply fractions
+      uint8_t product;
+      for (int bit = 0; bit < 4; bit++) {
+         if (multiplier & (1 << bit) && bit != 3) {
+            if (multiplicand & 0x08)
+               product += multiplicand | 0xf0;
+            else
+               product += multiplicand;
+
+         } else if (multiplier & 1 << bit) {
+            product += (~multiplier + 1) & 0xF;
+         }
+      }
+
+      uint8_t product_exponent =
+          (this->get_exponent() - this->bias) + (n.get_exponent() - n.bias);
+
+      if (product == 0)
+         return CFloat8(0, 0, 0);
+
+      // If fraction overflow
+      if ((product & 0x40) == 0x40 && this->get_sign() == n.get_sign()) {
+         product >>= 1;
+         product_exponent += 1;
+      }
+
+      // Normalize fraction
+      while ((product & 0x20) != 0x20) {
+         product <<= 1;
+         product_exponent -= 1;
+      }
+
+      // Saturate exponent
+      if (product_exponent > 15) {
+         if ((product & 0x40) == 0x40)
+            return CFloat8(0xFF);
+         else
+            return CFloat8(0x7F);
+      }
+   }
 };
 
 int main() {
