@@ -337,6 +337,7 @@ int main() {
 
    VMatrix *dut = new VMatrix;
 
+   int time = 0;
    Verilated::traceEverOn(true);
    VerilatedVcdC *m_trace = new VerilatedVcdC;
    dut->trace(m_trace, 5);
@@ -371,17 +372,25 @@ int main() {
 
    // Reset
    dut->eval();
-   dut->clk = ~dut->clk;
+   m_trace->dump(time++);
+   dut->clk ^= 1;
    dut->eval();
-   dut->clk = ~dut->clk;
+   m_trace->dump(time++);
+   dut->clk ^= 1;
    dut->eval();
+   m_trace->dump(time++);
 
    dut->reset = 0;
    dut->start = 1;
 
    while (!dut->done) {
-      dut->clk = ~dut->clk;
+      dut->clk ^= 1;
+      dut->eval();
+      m_trace->dump(time++);
    }
+   dut->clk ^= 1;
+   dut->eval();
+   m_trace->dump(time++);
 
    CFloatMat3 hw_result = dut_to_mat(dut);
    std::cout << "\n=== HW Result (X * Y) ===\n";
