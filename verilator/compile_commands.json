@@ -35,7 +35,7 @@
       "matrix_tb.o",
       "../matrix_tb.cpp"
     ],
-    "directory": "/home/jack/Documents/Class/ECE460M_Lab6/verilator/obj_dir",
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
     "output": "matrix_tb.o"
   },
   {
@@ -74,7 +74,7 @@
       "verilated.o",
       "/usr/share/verilator/include/verilated.cpp"
     ],
-    "directory": "/home/jack/Documents/Class/ECE460M_Lab6/verilator/obj_dir",
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
     "output": "verilated.o"
   },
   {
@@ -113,7 +113,7 @@
       "verilated_vcd_c.o",
       "/usr/share/verilator/include/verilated_vcd_c.cpp"
     ],
-    "directory": "/home/jack/Documents/Class/ECE460M_Lab6/verilator/obj_dir",
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
     "output": "verilated_vcd_c.o"
   },
   {
@@ -152,7 +152,7 @@
       "verilated_threads.o",
       "/usr/share/verilator/include/verilated_threads.cpp"
     ],
-    "directory": "/home/jack/Documents/Class/ECE460M_Lab6/verilator/obj_dir",
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
     "output": "verilated_threads.o"
   },
   {
@@ -191,7 +191,7 @@
       "VMatrix__ALL.o",
       "VMatrix__ALL.cpp"
     ],
-    "directory": "/home/jack/Documents/Class/ECE460M_Lab6/verilator/obj_dir",
+    "directory": "/home/jack/Documents/ClassMaterials/Fa26/ECE460M/lab6/verilator/obj_dir",
     "output": "VMatrix__ALL.o"
   }
 ]
