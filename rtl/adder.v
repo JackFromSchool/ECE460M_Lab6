@@ -51,17 +51,29 @@ module adder(
     reg [7:0] sum;
     
     //shifting exponents and gettin shifted fractions
-    always @(*) begin
-       if (exp_a < exp_b) begin
-          shift_a = f_a >> (exp_b - exp_a);
-          shift_b = f_b;
-          shift_exp = exp_b;        
-       end else begin //handles both b<a and b=a     
-          shift_b = f_b >> (exp_a - exp_b);//will shift 0 if same
-          shift_exp = exp_a;
-          shift_a = f_a;         
-       end
-    end
+//    always @(*) begin
+//       if (exp_a < exp_b) begin
+//          shift_a = f_a >> (exp_b - exp_a);
+//          shift_b = f_b;
+//          shift_exp = exp_b;        
+//       end else begin //handles both b<a and b=a     
+//          shift_b = f_b >> (exp_a - exp_b);//will shift 0 if same
+//          shift_exp = exp_a;
+//          shift_a = f_a;         
+//       end
+//    end
+
+      always @(*) begin
+         if (exp_a < exp_b) begin
+         shift_a = (f_a >> (exp_b - exp_a)) | {6'd0, |(f_a & ~(7'h7F << (exp_b - exp_a)))};
+         shift_b = f_b;
+         shift_exp = exp_b;
+      end else begin
+         shift_b = (f_b >> (exp_a - exp_b)) | {6'd0, |(f_b & ~(7'h7F << (exp_a - exp_b)))};
+         shift_exp = exp_a;
+         shift_a = f_a;
+      end
+   end
 
     //adding with magnitude rule or wahtever stupiod shit
     always @(*) begin
