@@ -104,10 +104,10 @@ class CFloat8 {
       // Align Exponents
       while (addend1_exp != addend2_exp) {
          if (addend1_exp < addend2_exp) {
-            addend1 >>= 1;
+            addend1 = (addend1 >> 1) | (addend1 & 1);
             addend1_exp++;
          } else {
-            addend2 >>= 1;
+            addend2 = (addend2 >> 1) | (addend2 & 1);
             addend2_exp++;
          }
       }
@@ -137,7 +137,7 @@ class CFloat8 {
 
          // Fraction overflow? 1x.xxxxxx
          if (sum & 0x80) {
-            sum >>= 1;
+            sum = (sum >> 1) | (sum & 1);
             sum_exp++;
          }
 
@@ -185,7 +185,8 @@ class CFloat8 {
 
          // Check fraction overflow eg. 1x.xxxxxx
          if ((product & 0x80) == 0x80) {
-            product >>= 1;
+
+            product = (product >> 1) | (product & 1);
             product_exponent += 1;
          }
 
