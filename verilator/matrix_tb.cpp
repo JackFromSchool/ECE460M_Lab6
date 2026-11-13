@@ -247,6 +247,20 @@ class CFloatMat3 {
    }
 };
 
+CFloatMat3 dut_to_mat(VMatrix *dut) {
+   CFloatMat3 result;
+   result.array[0][0] = CFloat8(dut->c00);
+   result.array[0][1] = CFloat8(dut->c01);
+   result.array[0][2] = CFloat8(dut->c02);
+   result.array[1][0] = CFloat8(dut->c10);
+   result.array[1][1] = CFloat8(dut->c11);
+   result.array[1][2] = CFloat8(dut->c12);
+   result.array[2][0] = CFloat8(dut->c20);
+   result.array[2][1] = CFloat8(dut->c21);
+   result.array[2][2] = CFloat8(dut->c22);
+   return result;
+}
+
 int main() {
 
    // Test 1: Identity * Identity = Identity
@@ -330,6 +344,48 @@ int main() {
 
    dut->a00 = X.array[0][0].get_raw();
    dut->a01 = X.array[0][1].get_raw();
+   dut->a02 = X.array[0][2].get_raw();
+
+   dut->a10 = X.array[1][0].get_raw();
+   dut->a11 = X.array[1][1].get_raw();
+   dut->a12 = X.array[1][2].get_raw();
+
+   dut->a20 = X.array[2][0].get_raw();
+   dut->a21 = X.array[2][1].get_raw();
+   dut->a22 = X.array[2][2].get_raw();
+
+   dut->b00 = Y.array[0][0].get_raw();
+   dut->b01 = Y.array[0][1].get_raw();
+   dut->b02 = Y.array[0][2].get_raw();
+
+   dut->b10 = Y.array[1][0].get_raw();
+   dut->b11 = Y.array[1][1].get_raw();
+   dut->b12 = Y.array[1][2].get_raw();
+
+   dut->b20 = Y.array[2][0].get_raw();
+   dut->b21 = Y.array[2][1].get_raw();
+   dut->b22 = Y.array[2][2].get_raw();
+
+   dut->clk = 0;
+   dut->reset = 1;
+
+   // Reset
+   dut->eval();
+   dut->clk = ~dut->clk;
+   dut->eval();
+   dut->clk = ~dut->clk;
+   dut->eval();
+
+   dut->reset = 0;
+   dut->start = 1;
+
+   while (!dut->done) {
+      dut->clk = ~dut->clk;
+   }
+
+   CFloatMat3 hw_result = dut_to_mat(dut);
+   std::cout << "\n=== HW Result (X * Y) ===\n";
+   hw_result.display();
 
    m_trace->close();
    delete dut;
