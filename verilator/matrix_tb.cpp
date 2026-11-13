@@ -1,5 +1,9 @@
 #include "VMatrix.h"
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
+#include <random>
 #include <stdlib.h>
 #include <verilated.h>
 #include <verilated_vcd_c.h>
@@ -26,9 +30,10 @@ uint8_t fixed_point_round_to_even(uint8_t num) {
 class CFloat8 {
  private:
    uint8_t num;
-   uint8_t bias = 0;
 
  public:
+   uint8_t bias = 0;
+
    CFloat8(uint8_t exponent, uint8_t sign, uint8_t fraction) {
       this->num = (sign & 1) << 7;
       this->num |= (exponent & 0xF) << 3;
@@ -261,141 +266,177 @@ CFloatMat3 dut_to_mat(VMatrix *dut) {
    return result;
 }
 
-int main() {
+static std::mt19937 rng;
+static int rnd(int lo, int hi) {
+   return std::uniform_int_distribution<int>(lo, hi)(rng);
+}
 
-   // Test 1: Identity * Identity = Identity
-   CFloatMat3 identity;
-   identity.array[0][0] = CFloat8(0, 0, 0); // Will just use simple values
-   // Build identity matrix: diagonal = 1.0 (exp=0 w/ bias=0 means 1.0 =
-   // exp=0,frac=0 -> actually need to think) CFloat8(exponent, sign, fraction):
-   // value = 1.fraction * 2^exponent 1.0 = 1.000 * 2^0 -> exp=0, sign=0, frac=0
-   // => CFloat8(0,0,0) = 0 since exp==0 && frac==0 is zero Looking at display:
-   // zero check is exp==0 && frac==0, so 1.0 needs exp with bias... bias=0,
-   // so 1.0 = 1.000 * 2^0 -> exp=0, frac=0 but that's the zero encoding Use
-   // exp=1 for a known nonzero: 1.000 * 2^1 = 2.0 Let's just use simple test
-   // values
+// Value of a CFloat8 at a given bias (zero = E==0 && F==0, either sign)
+static double val(const CFloat8 &x, int bias) {
+   if (x.get_exponent() == 0 && x.get_fraction() == 0)
+      return 0.0;
+   double m = (1.0 + x.get_fraction() / 8.0) *
+              std::ldexp(1.0, (int)x.get_exponent() - bias);
+   return x.get_sign() ? -m : m;
+}
 
-   // Test 1: simple known matrices
-   CFloatMat3 A, B;
-   // A = [[2, 0, 0], [0, 2, 0], [0, 0, 2]] (2*identity)
-   // 2.0 = 1.000 * 2^1 -> CFloat8(1, 0, 0)
-   A.array[0][0] = CFloat8(1, 0, 0); // 2.0
-   A.array[1][1] = CFloat8(1, 0, 0); // 2.0
-   A.array[2][2] = CFloat8(1, 0, 0); // 2.0
+static bool is_zero(const CFloat8 &x) {
+   return x.get_exponent() == 0 && x.get_fraction() == 0;
+}
 
-   // B = [[1, 0, 0], [0, 1, 0], [0, 0, 1]] -- can't encode 1.0 with bias=0,
-   // use 2.0 again B = 2*identity as well, so A*B should = 4*identity 4.0
-   // = 1.000 * 2^2 -> CFloat8(2, 0, 0)
-   B.array[0][0] = CFloat8(1, 0, 0); // 2.0
-   B.array[1][1] = CFloat8(1, 0, 0); // 2.0
-   B.array[2][2] = CFloat8(1, 0, 0); // 2.0
+// Random operand: zero (00 or 80) or a normal number. mode picks the exponent
+// range.
+static CFloat8 gen_operand(int bias, int mode) {
+   CFloat8 x(0);
+   if (rnd(0, 99) < 10) {
+      x = CFloat8((uint8_t)(rnd(0, 1) ? 0x80 : 0x00));
+   } else {
+      int E, F = rnd(0, 7), S = rnd(0, 1);
+      if (mode == 0)
+         E = rnd(bias - 1, bias + 2); // values near 1
+      else if (mode == 1)
+         E = rnd(1, 15); // full range, saturation likely
+      else {
+         E = rnd(bias, bias + 1); // few values: ties / exact cancellation
+         F = rnd(0, 1) ? 4 : 0;
+      }
+      if (E < 1)
+         E = 1;
+      if (E > 15)
+         E = 15;
+      x = CFloat8((uint8_t)E, (uint8_t)S, (uint8_t)F);
+   }
+   x.bias = bias;
+   return x;
+}
 
-   std::cout << "=== Test 1: (2*I) * (2*I) = 4*I ===\n";
-   std::cout << "A:\n";
-   A.display();
-   std::cout << "B:\n";
-   B.display();
-   CFloatMat3 C = A * B;
-   std::cout << "A * B:\n";
-   C.display();
+// Autograder never hits underflow, so skip inputs that would.
+static bool no_underflow(CFloatMat3 &A, CFloatMat3 &B, int bias) {
+   double min_normal = std::ldexp(1.0, 1 - bias);
+   for (int i = 0; i < 3; i++)
+      for (int j = 0; j < 3; j++) {
+         CFloat8 acc(0);
+         for (int k = 0; k < 3; k++) {
+            CFloat8 a = A.array[i][k], b = B.array[k][j];
+            if (!is_zero(a) && !is_zero(b) &&
+                (int)a.get_exponent() + (int)b.get_exponent() - bias < 1)
+               return false; // product underflow
+            CFloat8 p = a * b;
+            double s = val(acc, bias) + val(p, bias);
+            if (s != 0.0 && std::fabs(s) < min_normal)
+               return false; // sum underflow
+            acc = acc + p;
+         }
+      }
+   return true;
+}
 
-   // Test 2: non-diagonal matrices
-   // 1.5 = 1.100 * 2^0 -> CFloat8(0, 0, 4) -- but exp=0,frac!=0 is nonzero?
-   // Looking at zero check: exp==0 && frac==0 -> zero. So exp=0,frac=4 is valid
-   // nonzero. value = (1 + 4/8) * 2^0 = 1.5
-   CFloatMat3 X, Y;
-   X.array[0][0] = CFloat8(1, 0, 0); // 2.0
-   X.array[0][1] = CFloat8(0, 0, 4); // 1.5
-   X.array[0][2] = CFloat8(1, 0, 4); // 3.0 = 1.100*2^1
-   X.array[1][0] = CFloat8(0, 1, 0); // -1.0... wait bias=0 exp=0 frac=0 is zero
-   // -2.0 = CFloat8(1, 1, 0)
-   X.array[1][0] = CFloat8(1, 1, 0); // -2.0
-   X.array[1][1] = CFloat8(1, 0, 0); // 2.0
-   X.array[1][2] = CFloat8(0, 0, 0); // 0
-   X.array[2][0] = CFloat8(0, 0, 0); // 0
-   X.array[2][1] = CFloat8(0, 0, 4); // 1.5
-   X.array[2][2] = CFloat8(1, 0, 0); // 2.0
+static void tick(VMatrix *dut) {
+   dut->clk = 0;
+   dut->eval();
+   dut->clk = 1;
+   dut->eval();
+}
 
-   Y.array[0][0] = CFloat8(1, 0, 0); // 2.0
-   Y.array[0][1] = CFloat8(0, 0, 0); // 0
-   Y.array[0][2] = CFloat8(0, 0, 4); // 1.5
-   Y.array[1][0] = CFloat8(0, 0, 4); // 1.5
-   Y.array[1][1] = CFloat8(1, 0, 0); // 2.0
-   Y.array[1][2] = CFloat8(0, 0, 0); // 0
-   Y.array[2][0] = CFloat8(1, 1, 0); // -2.0
-   Y.array[2][1] = CFloat8(0, 0, 4); // 1.5
-   Y.array[2][2] = CFloat8(1, 0, 0); // 2.0
+// Load matrices, pulse start, wait for done. Returns false on timeout.
+static bool run_dut(VMatrix *dut, CFloatMat3 &A, CFloatMat3 &B, int bias,
+                    CFloatMat3 &out) {
+   CData *ap[9] = {&dut->a00, &dut->a01, &dut->a02, &dut->a10, &dut->a11,
+                   &dut->a12, &dut->a20, &dut->a21, &dut->a22};
+   CData *bp[9] = {&dut->b00, &dut->b01, &dut->b02, &dut->b10, &dut->b11,
+                   &dut->b12, &dut->b20, &dut->b21, &dut->b22};
+   for (int i = 0; i < 9; i++) {
+      *ap[i] = A.array[i / 3][i % 3].get_raw();
+      *bp[i] = B.array[i / 3][i % 3].get_raw();
+   }
+   dut->bias = bias;
+   dut->reset = 0;
+   dut->start = 1;
+   tick(dut); // setup cycle
+   dut->start = 0;
 
-   std::cout << "\n=== Test 2: general matrices ===\n";
-   std::cout << "X:\n";
-   X.display();
-   std::cout << "Y:\n";
-   Y.display();
-   CFloatMat3 Z = X * Y;
-   std::cout << "X * Y:\n";
-   Z.display();
+   int timeout = 20;
+   while (!dut->done && timeout--)
+      tick(dut);
+   out = dut_to_mat(dut);
+   return dut->done;
+}
+
+// 8'h80 and 8'h00 both mean zero; spec wants 00 on outputs
+static uint8_t norm(uint8_t v) { return (v & 0x7F) ? v : 0x00; }
+
+int main(int argc, char **argv) {
+   Verilated::commandArgs(argc, argv);
+   int num_tests = argc > 1 ? atoi(argv[1]) : 5000;
+   uint32_t seed = argc > 2 ? (uint32_t)strtoul(argv[2], nullptr, 0)
+                            : std::random_device{}();
+   printf("seed = %u\n", seed);
+   rng.seed(seed);
 
    VMatrix *dut = new VMatrix;
 
-   int time = 0;
-   Verilated::traceEverOn(true);
-   VerilatedVcdC *m_trace = new VerilatedVcdC;
-   dut->trace(m_trace, 5);
-   m_trace->open("waveform.vcd");
-
-   dut->a00 = X.array[0][0].get_raw();
-   dut->a01 = X.array[0][1].get_raw();
-   dut->a02 = X.array[0][2].get_raw();
-
-   dut->a10 = X.array[1][0].get_raw();
-   dut->a11 = X.array[1][1].get_raw();
-   dut->a12 = X.array[1][2].get_raw();
-
-   dut->a20 = X.array[2][0].get_raw();
-   dut->a21 = X.array[2][1].get_raw();
-   dut->a22 = X.array[2][2].get_raw();
-
-   dut->b00 = Y.array[0][0].get_raw();
-   dut->b01 = Y.array[0][1].get_raw();
-   dut->b02 = Y.array[0][2].get_raw();
-
-   dut->b10 = Y.array[1][0].get_raw();
-   dut->b11 = Y.array[1][1].get_raw();
-   dut->b12 = Y.array[1][2].get_raw();
-
-   dut->b20 = Y.array[2][0].get_raw();
-   dut->b21 = Y.array[2][1].get_raw();
-   dut->b22 = Y.array[2][2].get_raw();
-
-   dut->clk = 0;
+   // reset
+   dut->start = 0;
    dut->reset = 1;
-
-   // Reset
-   dut->eval();
-   m_trace->dump(time++);
-   dut->clk ^= 1;
-   dut->eval();
-   m_trace->dump(time++);
-   dut->clk ^= 1;
-   dut->eval();
-   m_trace->dump(time++);
-
+   tick(dut);
+   tick(dut);
    dut->reset = 0;
-   dut->start = 1;
 
-   while (!dut->done) {
-      dut->clk ^= 1;
-      dut->eval();
-      m_trace->dump(time++);
+   int ran = 0, fails = 0;
+   for (int t = 0; t < num_tests; t++) {
+      // build a valid random test
+      int bias = 0;
+      CFloatMat3 A, B;
+      bool ok = false;
+      for (int attempt = 0; attempt < 1000 && !ok; attempt++) {
+         bias = rnd(9, 12);
+         int mode = rnd(0, 2);
+         for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++) {
+               A.array[i][j] = gen_operand(bias, mode);
+               B.array[i][j] = gen_operand(bias, mode);
+            }
+         ok = no_underflow(A, B, bias);
+      }
+      if (!ok)
+         continue;
+
+      CFloatMat3 expected = A * B; // reference model
+      CFloatMat3 got;
+      bool done = run_dut(dut, A, B, bias, got);
+      ran++;
+
+      bool bad = !done;
+      for (int i = 0; i < 9 && !bad; i++)
+         if (norm(got.array[i / 3][i % 3].get_raw()) !=
+             norm(expected.array[i / 3][i % 3].get_raw()))
+            bad = true;
+
+      if (bad) {
+         fails++;
+         if (fails <= 10) {
+            printf("MISMATCH test %d (bias %d)%s\n", t, bias,
+                   done ? "" : "  [TIMEOUT: done never asserted]");
+            printf("  A:");
+            for (int i = 0; i < 9; i++)
+               printf(" %02X", A.array[i / 3][i % 3].get_raw());
+            printf("\n  B:");
+            for (int i = 0; i < 9; i++)
+               printf(" %02X", B.array[i / 3][i % 3].get_raw());
+            printf("\n  exp:");
+            for (int i = 0; i < 9; i++)
+               printf(" %02X", norm(expected.array[i / 3][i % 3].get_raw()));
+            printf("\n  got:");
+            for (int i = 0; i < 9; i++)
+               printf(" %02X", norm(got.array[i / 3][i % 3].get_raw()));
+            printf("\n");
+         }
+      }
    }
-   dut->clk ^= 1;
-   dut->eval();
-   m_trace->dump(time++);
 
-   CFloatMat3 hw_result = dut_to_mat(dut);
-   std::cout << "\n=== HW Result (X * Y) ===\n";
-   hw_result.display();
-
-   m_trace->close();
+   printf("%d tests run, %d failed -> %s\n", ran, fails,
+          fails ? "FAIL" : "PASS");
+   dut->final();
    delete dut;
+   return fails != 0;
 }
